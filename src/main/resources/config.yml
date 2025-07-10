@@ -1,0 +1,8 @@
+webhook:
+  port: 4567
+  secret: "another-different-secure-key"
+
+stats:
+  url: "http://localhost:5000/api/v1/server/stats"
+  secret: "another-different-secure-key"
+  interval: 6000
