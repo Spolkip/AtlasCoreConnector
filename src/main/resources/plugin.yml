@@ -2,7 +2,9 @@ name: AtlasCoreConnector
 version: 1.0.0
 main: me.help.minecraft_store.AtlasCoreConnector
 api-version: 1.18
-commands:
-  verify:
-    description: Generates a verification code to link your Minecraft account to the website.
-    usage: /verify
+# This ensures your plugin loads AFTER the plugins it needs.
+depend:
+  - PlaceholderAPI
+softdepend:
+  - AuraSkills
+  - Fabled

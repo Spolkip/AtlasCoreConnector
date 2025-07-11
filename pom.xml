@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -17,15 +18,35 @@
     </properties>
 
     <repositories>
-        <!-- This adds the Spigot repository to your build -->
+        <!-- SpigotMC Repository for Spigot-API snapshots -->
         <repository>
             <id>spigot-repo</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
-        <!-- This adds Maven Central, where SparkJava and Gson are hosted -->
+        <!-- PlaceholderAPI Repository - ESSENTIAL for PlaceholderAPI dependency -->
+        <repository>
+            <id>placeholderapi-repo</id>
+            <url>https://repo.extendedclip.com/content/repositories/placeholderapi/</url>
+        </repository>
+        <!-- Fabled Repository - ESSENTIAL for Fabled dependency -->
+        <!-- This is a common repository for Magemonkey plugins. VERIFY this URL with Fabled's official documentation. -->
+        <repository>
+            <id>fabled-repo</id>
+            <url>https://nexus.hc.to/content/repositories/publichc/</url>
+        </repository>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+        <!-- Maven Central, where SparkJava, Gson, and SLF4J are typically hosted -->
         <repository>
             <id>central</id>
             <url>https://repo.maven.apache.org/maven2</url>
+        </repository>
+        <!-- Sonatype Snapshots - sometimes needed for snapshot versions of dependencies -->
+        <repository>
+            <id>sonatype</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
         </repository>
     </repositories>
 
@@ -35,7 +56,23 @@
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
             <version>1.20.6-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
+            <scope>provided</scope> <!-- Provided by the Minecraft server -->
+        </dependency>
+
+        <!-- PlaceholderAPI - Provided by the server (as a separate plugin) -->
+        <dependency>
+            <groupId>me.clip</groupId>
+            <artifactId>placeholderapi</artifactId>
+            <version>2.11.6</version> <!-- Use the exact version you have installed on your server -->
+            <scope>provided</scope> <!-- ESSENTIAL: This plugin is provided by the server -->
+        </dependency>
+
+        <!-- Fabled - Provided by the server (as a separate plugin) -->
+        <dependency>
+            <groupId>studio.magemonkey</groupId>
+            <artifactId>fabled</artifactId>
+            <version>1.0.4-R0.58-SNAPSHOT</version> <!-- Use the exact version you have installed on your server -->
+            <scope>provided</scope> <!-- ESSENTIAL: This plugin is provided by the server -->
         </dependency>
 
         <!-- Spark Framework for simple HTTP server -->
@@ -43,6 +80,7 @@
             <groupId>com.sparkjava</groupId>
             <artifactId>spark-core</artifactId>
             <version>2.9.4</version>
+            <scope>compile</scope> <!-- Will be shaded/bundled -->
         </dependency>
 
         <!-- JSON Library for data serialization -->
@@ -50,21 +88,66 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.10.1</version>
+            <scope>compile</scope> <!-- Will be shaded/bundled -->
         </dependency>
 
-        <!-- SLF4J Binding for JDK Logging -->
-        <!-- This dependency fixes the "Failed to load class org.slf4j.impl.StaticLoggerBinder" error -->
+        <!-- SLF4J Binding for JDK Logging - fixes "Failed to load class org.slf4j.impl.StaticLoggerBinder" -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-jdk14</artifactId>
             <version>1.7.32</version>
+            <scope>compile</scope> <!-- Will be shaded/bundled -->
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.32</version>
+            <scope>compile</scope> <!-- Required by slf4j-jdk14, will be shaded/bundled -->
+        </dependency>
+
+        <!-- Jetty dependencies for WebSocket-Driver (used by SparkJava).
+             Updated to a more recent 9.4.x version to try and resolve NoSuchMethodError. -->
+        <dependency>
+            <groupId>org.eclipse.jetty.websocket</groupId>
+            <artifactId>websocket-client</artifactId>
+            <version>9.4.51.v20230217</version> <!-- UPDATED VERSION -->
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-client</artifactId>
+            <version>9.4.51.v20230217</version> <!-- UPDATED VERSION -->
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-http</artifactId>
+            <version>9.4.51.v20230217</version> <!-- UPDATED VERSION -->
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-util</artifactId>
+            <version>9.4.51.v20230217</version> <!-- UPDATED VERSION -->
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.aurelium</groupId>
+            <artifactId>auraskills-api-bukkit</artifactId>
+            <version>2.2.4</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jetty</groupId>
+            <artifactId>jetty-io</artifactId>
+            <version>9.4.51.v20230217</version> <!-- UPDATED VERSION -->
             <scope>compile</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
-            <!-- Updated Maven Compiler Plugin -->
+            <!-- Maven Compiler Plugin - ensures correct Java version compilation -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -74,7 +157,7 @@
                     <target>17</target>
                 </configuration>
             </plugin>
-            <!-- Maven Shade Plugin to package all dependencies into the final JAR -->
+            <!-- Maven Shade Plugin - to package all 'compile' scoped dependencies into the final JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -86,7 +169,9 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <!-- Shading relocates the plugin's dependencies to avoid conflicts with other plugins -->
+                            <!-- CreateDependencyReducedPom should be false to prevent issues with plugin.yml -->
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <!-- Relocations to avoid conflicts with other plugins -->
                             <relocations>
                                 <relocation>
                                     <pattern>spark</pattern>
@@ -100,10 +185,18 @@
                                     <pattern>org.slf4j</pattern>
                                     <shadedPattern>me.help.minecraft_store.dependencies.slf4j</shadedPattern>
                                 </relocation>
+                                <!-- Ensure all Jetty components are relocated -->
                                 <relocation>
                                     <pattern>org.eclipse.jetty</pattern>
                                     <shadedPattern>me.help.minecraft_store.dependencies.jetty</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.eclipse.jetty.websocket</pattern>
+                                    <shadedPattern>me.help.minecraft_store.dependencies.jetty.websocket</shadedPattern>
+                                </relocation>
+                                <!-- IMPORTANT: DO NOT RELOCATE PlaceholderAPI or Fabled -->
+                                <!-- They are 'provided' scope and should be on the server as separate plugins. -->
+                                <!-- Relocating them here would cause conflicts. -->
                             </relocations>
                         </configuration>
                     </execution>
