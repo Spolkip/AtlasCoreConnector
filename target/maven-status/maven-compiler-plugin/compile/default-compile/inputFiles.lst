@@ -1,6 +1,9 @@
+C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\services\PlayerProfileService.java
 C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\tasks\StatsTask.java
 C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\payloads\VerificationPayload.java
+C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\data\PlayerProfileData.java
 C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\payloads\CommandPayload.java
 C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\web\WebServer.java
 C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\listeners\PlayerListener.java
 C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\AtlasCoreConnector.java
+C:\Users\spiro\Desktop\codex-dev\minecraft_store\src\main\java\me\help\minecraft_store\listeners\PlayerQuitListener.java
