@@ -6,8 +6,10 @@ import me.clip.placeholderapi.PlaceholderAPI;
 import me.help.minecraft_store.AtlasCoreConnector;
 import me.help.minecraft_store.data.PlayerProfileData;
 import me.help.minecraft_store.payloads.CommandPayload;
+import me.help.minecraft_store.payloads.VerificationPayload;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import spark.Spark;
 
@@ -32,6 +34,7 @@ public class WebServer {
     }
 
     public void start() {
+        // Ensure Spark runs with the correct class loader
         Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
 
         try {
@@ -39,7 +42,7 @@ public class WebServer {
             String secret = plugin.getConfig().getString("webhook.secret");
 
             if (secret == null || secret.isEmpty() || secret.equals("YOUR_SECRET_KEY_HERE")) {
-                plugin.getLogger().severe("CRITICAL: webhook.secret is not set. Web server is disabled for security.");
+                plugin.getLogger().severe("CRITICAL: webhook.secret is not set in config.yml. Web server is disabled for security.");
                 return;
             }
 
@@ -48,18 +51,127 @@ public class WebServer {
 
             setupMiddleware(secret);
 
+            // --- Define All API Endpoints ---
             Spark.get("/", (req, res) -> "AtlasCoreConnector is running");
-
             Spark.post("/execute-command", this::handleExecuteCommand);
-
-            // **REWRITTEN ENDPOINT LOGIC**
             Spark.post("/player-stats", this::handlePlayerStats);
+
+            // FIX: Added missing endpoints for account verification
+            Spark.post("/generate-and-send-code", this::handleGenerateAndSendCode);
+            Spark.post("/verify-code", this::handleVerifyCode);
 
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to start internal web server", e);
         }
     }
 
+    /**
+     * Sets up Spark middleware for CORS and authentication.
+     */
+    private void setupMiddleware(String secret) {
+        // Enable CORS
+        Spark.options("/*", (request, response) -> {
+            String accessControlRequestHeaders = request.headers("Access-Control-Request-Headers");
+            if (accessControlRequestHeaders != null) {
+                response.header("Access-Control-Allow-Headers", accessControlRequestHeaders);
+            }
+            String accessControlRequestMethod = request.headers("Access-Control-Request-Methods");
+            if (accessControlRequestMethod != null) {
+                response.header("Access-Control-Allow-Methods", accessControlRequestMethod);
+            }
+            return "OK";
+        });
+
+        Spark.before((request, response) -> response.header("Access-Control-Allow-Origin", "*"));
+
+        // Authentication middleware to protect endpoints
+        Spark.before((req, res) -> {
+            // Don't protect the root or OPTIONS requests
+            if (req.pathInfo().equals("/") || req.requestMethod().equals("OPTIONS")) {
+                return;
+            }
+            String authHeader = req.headers("Authorization");
+            String expectedHeader = "Bearer " + secret;
+            if (!expectedHeader.equals(authHeader)) {
+                plugin.getLogger().warning("Unauthorized request to " + req.pathInfo() + " from IP: " + req.ip());
+                Spark.halt(401, gson.toJson(Map.of("success", false, "message", "Unauthorized.")));
+            }
+        });
+    }
+
+    /**
+     * Handles requests to generate and send a verification code to an online player.
+     */
+    private String handleGenerateAndSendCode(spark.Request req, spark.Response res) {
+        res.type("application/json");
+        VerificationPayload payload = gson.fromJson(req.body(), VerificationPayload.class);
+        String username = payload != null ? payload.getUsername() : null;
+
+        if (username == null || username.trim().isEmpty()) {
+            res.status(400);
+            return gson.toJson(Map.of("success", false, "message", "Username is required."));
+        }
+
+        Player player = Bukkit.getPlayerExact(username);
+        if (player == null || !player.isOnline()) {
+            res.status(404);
+            return gson.toJson(Map.of("success", false, "message", "Player is not online."));
+        }
+
+        // Generate a 6-digit code
+        String code = String.format("%06d", random.nextInt(999999));
+        plugin.getVerificationCodes().put(player.getUniqueId(), code);
+
+        // Send the code to the player in-game (must be on the main thread)
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                player.sendMessage("§e[AtlasCore] §fYour verification code is: §a§l" + code);
+                player.sendMessage("§e[AtlasCore] §fEnter this code on the website to link your account.");
+            }
+        }.runTask(plugin);
+
+        return gson.toJson(Map.of("success", true, "message", "Code sent to player in-game."));
+    }
+
+    /**
+     * Handles requests to verify a code and link a Minecraft account.
+     */
+    private String handleVerifyCode(spark.Request req, spark.Response res) {
+        res.type("application/json");
+        VerificationPayload payload = gson.fromJson(req.body(), VerificationPayload.class);
+        String username = payload != null ? payload.getUsername() : null;
+        String code = payload != null ? payload.getCode() : null;
+
+        if (username == null || code == null) {
+            res.status(400);
+            return gson.toJson(Map.of("success", false, "message", "Username and code are required."));
+        }
+
+        // Use OfflinePlayer to get UUID without requiring the player to be online
+        OfflinePlayer player = Bukkit.getOfflinePlayer(username);
+        UUID playerUUID = player.getUniqueId();
+
+        if (playerUUID == null) {
+            res.status(404);
+            return gson.toJson(Map.of("success", false, "message", "Player not found."));
+        }
+
+        String storedCode = plugin.getVerificationCodes().get(playerUUID);
+
+        if (storedCode != null && storedCode.equals(code)) {
+            plugin.getVerificationCodes().remove(playerUUID); // Code is valid, remove it
+            res.status(200);
+            return gson.toJson(Map.of("success", true, "message", "Verification successful.", "uuid", playerUUID.toString()));
+        } else {
+            res.status(400);
+            return gson.toJson(Map.of("success", false, "message", "Invalid or expired verification code."));
+        }
+    }
+
+    /**
+     * Handles requests to execute a command from the web store.
+     */
     private String handleExecuteCommand(spark.Request req, spark.Response res) {
         res.type("application/json");
         CommandPayload payload = gson.fromJson(req.body(), CommandPayload.class);
@@ -85,6 +197,9 @@ public class WebServer {
         return gson.toJson(Map.of("success", true, "message", "Command dispatched."));
     }
 
+    /**
+     * Handles requests to fetch a player's profile stats.
+     */
     private String handlePlayerStats(spark.Request req, spark.Response res) {
         res.type("application/json");
         Map<String, String> payload = gson.fromJson(req.body(), Map.class);
@@ -97,11 +212,8 @@ public class WebServer {
 
         try {
             UUID playerUUID = UUID.fromString(playerUUIDString);
-
-            // Create a CompletableFuture to handle the result from the Bukkit thread.
             CompletableFuture<String> futureResult = new CompletableFuture<>();
 
-            // Run the entire logic on the main server thread to ensure API safety.
             new BukkitRunnable() {
                 @Override
                 public void run() {
@@ -112,49 +224,45 @@ public class WebServer {
                             return;
                         }
 
-                        // STEP 1: Get live data from the game. This is the priority.
                         Map<String, String> liveStats = new HashMap<>();
                         String playerName = offlinePlayer.getName() != null ? offlinePlayer.getName() : "Unknown";
                         liveStats.put("player_name", playerName);
 
-                        // Build and parse all placeholders
                         List<String> placeholders = getPlaceholders();
                         if (!placeholders.isEmpty()) {
                             List<String> parsedValues = PlaceholderAPI.setPlaceholders(offlinePlayer, placeholders);
                             for (int i = 0; i < placeholders.size(); i++) {
                                 String key = placeholders.get(i).replace("%", "").toLowerCase();
                                 String value = parsedValues.get(i);
-                                if (!value.equals(placeholders.get(i))) { // Check if placeholder was replaced
+                                // FIX: Only save if the placeholder returned a meaningful value, it's not the placeholder itself, AND it's not empty
+                                if (!value.equals(placeholders.get(i)) && !value.isEmpty()) {
                                     liveStats.put(key, value);
                                 }
                             }
                         }
 
-                        // Handle Vault balance separately
                         if (Bukkit.getPluginManager().isPluginEnabled("Vault")) {
                             String balancePlaceholder = "%vault_eco_balance%";
                             String rawBalance = PlaceholderAPI.setPlaceholders(offlinePlayer, balancePlaceholder);
-                            if (rawBalance != null && !rawBalance.equals(balancePlaceholder)) {
+                            // FIX: Only save if the placeholder returned a meaningful value, it's not the placeholder itself, AND it's not empty
+                            if (rawBalance != null && !rawBalance.equals(balancePlaceholder) && !rawBalance.isEmpty()) {
                                 liveStats.put("vault_eco_balance", rawBalance.replace(",", ""));
                             }
                         }
 
-                        // STEP 2: Attempt to load the cached profile to enrich the data.
                         PlayerProfileData cachedProfile = null;
                         try {
-                            cachedProfile = plugin.getPlayerProfileService().loadPlayerProfile(playerUUID).get(); // .get() is safe here inside a Bukkit task
+                            cachedProfile = plugin.getPlayerProfileService().loadPlayerProfile(playerUUID).get();
                         } catch (Exception e) {
-                            plugin.getLogger().warning("Could not load cached profile for " + playerName + ". Proceeding without it. Error: " + e.getMessage());
+                            plugin.getLogger().warning("Could not load cached profile for " + playerName + ". Error: " + e.getMessage());
                         }
 
-                        // STEP 3: Combine the data, prioritizing live data.
                         Map<String, String> finalStats = new HashMap<>();
                         if (cachedProfile != null && cachedProfile.getStats() != null) {
                             finalStats.putAll(cachedProfile.getStats());
                         }
-                        finalStats.putAll(liveStats); // Live stats always overwrite cached stats.
+                        finalStats.putAll(liveStats); // <---- Live stats are put AFTER cached stats
 
-                        // STEP 4: Asynchronously save the updated profile back to Firebase if the player is online.
                         if (offlinePlayer.isOnline()) {
                             PlayerProfileData profileToSave = new PlayerProfileData(playerUUID, playerName, finalStats, System.currentTimeMillis());
                             plugin.getPlayerProfileService().savePlayerProfile(profileToSave);
@@ -169,7 +277,6 @@ public class WebServer {
                 }
             }.runTask(plugin);
 
-            // Wait for the Bukkit task to complete and return its result.
             return futureResult.get();
 
         } catch (Exception e) {
@@ -178,6 +285,9 @@ public class WebServer {
         }
     }
 
+    /**
+     * Gathers all relevant PlaceholderAPI placeholders.
+     */
     private List<String> getPlaceholders() {
         List<String> placeholders = new ArrayList<>();
         if (Bukkit.getPluginManager().isPluginEnabled("Fabled")) {
@@ -201,34 +311,9 @@ public class WebServer {
         return placeholders;
     }
 
-    private void setupMiddleware(String secret) {
-        Spark.options("/*", (request, response) -> {
-            String accessControlRequestHeaders = request.headers("Access-Control-Request-Headers");
-            if (accessControlRequestHeaders != null) {
-                response.header("Access-Control-Allow-Headers", accessControlRequestHeaders);
-            }
-            String accessControlRequestMethod = request.headers("Access-Control-Request-Methods");
-            if (accessControlRequestMethod != null) {
-                response.header("Access-Control-Allow-Methods", accessControlRequestMethod);
-            }
-            return "OK";
-        });
-
-        Spark.before((request, response) -> response.header("Access-Control-Allow-Origin", "*"));
-
-        Spark.before((req, res) -> {
-            if (req.pathInfo().equals("/") || req.requestMethod().equals("OPTIONS")) {
-                return;
-            }
-            String authHeader = req.headers("Authorization");
-            String expectedHeader = "Bearer " + secret;
-            if (!expectedHeader.equals(authHeader)) {
-                plugin.getLogger().warning("Unauthorized request to " + req.pathInfo() + " from IP: " + req.ip());
-                Spark.halt(401, gson.toJson(Map.of("success", false, "message", "Unauthorized.")));
-            }
-        });
-    }
-
+    /**
+     * Stops the Spark web server.
+     */
     public void stop() {
         Spark.stop();
         plugin.getLogger().info("Internal web server stopped.");

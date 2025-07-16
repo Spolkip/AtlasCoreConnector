@@ -3,6 +3,7 @@ me\help\minecraft_store\services\PlayerProfileService.class
 me\help\minecraft_store\tasks\StatsTask.class
 me\help\minecraft_store\web\WebServer$1.class
 me\help\minecraft_store\web\WebServer$2.class
+me\help\minecraft_store\web\WebServer$3.class
 me\help\minecraft_store\web\WebServer.class
 me\help\minecraft_store\AtlasCoreConnector$1.class
 me\help\minecraft_store\payloads\VerificationPayload.class

@@ -39,7 +39,20 @@ public class PlayerQuitListener implements Listener {
                 @Override
                 public void run() {
                     try {
+                        // FIX: Load existing profile data first to merge with
+                        PlayerProfileData existingProfile = null;
+                        try {
+                            existingProfile = plugin.getPlayerProfileService().loadPlayerProfile(playerUUID).get();
+                        } catch (Exception e) {
+                            plugin.getLogger().warning("Could not load existing profile for " + player.getName() + " on quit. Creating new one.");
+                            // If loading fails, existingProfile will remain null, and we'll proceed with an empty map.
+                        }
+
                         Map<String, String> stats = new HashMap<>();
+                        if (existingProfile != null && existingProfile.getStats() != null) {
+                            stats.putAll(existingProfile.getStats()); // Populate with existing stats
+                        }
+
                         List<String> placeholdersToParse = new ArrayList<>();
 
                         // Always save the player's current name.
@@ -63,18 +76,31 @@ public class PlayerQuitListener implements Listener {
                                     "%auraskills_forging%"
                             ));
                         }
+                        // ADDED: Include general statistics that were in WebServer's getPlaceholders but missing here
+                        placeholdersToParse.add("%statistic_player_kills%");
+                        placeholdersToParse.add("%statistic_deaths%");
+                        // ADDED: Include vault_eco_balance if Vault is enabled
+                        if (plugin.getServer().getPluginManager().isPluginEnabled("Vault")) {
+                            placeholdersToParse.add("%vault_eco_balance%");
+                        }
+
 
                         // Parse all collected placeholders using PlaceholderAPI.
                         for (String placeholder : placeholdersToParse) {
                             String value = PlaceholderAPI.setPlaceholders(player, placeholder);
                             String key = placeholder.replace("%", "").toLowerCase();
-                            // Only save if the placeholder returned a meaningful value.
-                            if (!value.equals(placeholder)) {
-                                stats.put(key, value);
+                            // Only save if the placeholder returned a meaningful value, it's not the placeholder itself, AND it's not empty
+                            if (!value.equals(placeholder) && !value.isEmpty()) { // <--- MODIFIED LINE
+                                if (key.equals("vault_eco_balance")) {
+                                    stats.put(key, value.replace(",", ""));
+                                } else {
+                                    stats.put(key, value);
+                                }
                             }
                         }
 
                         // Create a new data object with the collected stats.
+                        // This will overwrite old stats with newer/merged data.
                         PlayerProfileData profileData = new PlayerProfileData(
                                 playerUUID,
                                 player.getName(),
